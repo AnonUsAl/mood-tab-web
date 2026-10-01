@@ -549,6 +549,89 @@ d.setAttribute('data-theme',t||(window.matchMedia&&matchMedia('(prefers-color-sc
   .kpis > div:last-child { border-radius: 0 12px 12px 0; }
   .kpis dt { font-size: 12px; color: var(--text-3); }
   .kpis dd { font-size: 22px; font-weight: 660; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+
+  /* ===== 2026 优化：移动端导航 / 性能 / 可访问性 ===== */
+  body { overflow-x: clip; }
+  a, button { -webkit-tap-highlight-color: transparent; }
+  .brand, .btn, .tbtn, nav.menu a { -webkit-user-select: none; user-select: none; }
+  .menu-toggle { display: none; }
+  main > section { content-visibility: auto; contain-intrinsic-size: 760px; }
+  #record, #insight, #support, #privacy, #download, #stack { scroll-margin-top: 78px; }
+
+  @media (max-width: 880px) {
+    .bar { position: relative; }
+    .menu-toggle { display: grid; margin-left: auto; }
+    nav.menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 20px;
+      width: min(250px, calc(100vw - 40px));
+      padding: 8px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--surface) 94%, transparent);
+      box-shadow: var(--shadow-l);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-8px) scale(.98);
+      transform-origin: top right;
+      transition: opacity .22s var(--ease), transform .22s var(--ease);
+    }
+    nav.menu.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: none;
+    }
+    nav.menu a,
+    nav.menu a:not(.menu-cta) {
+      display: block;
+      padding: 11px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    nav.menu a:hover,
+    nav.menu a.act {
+      background: var(--primary-soft);
+      color: var(--primary-ink);
+    }
+    nav.menu a:not(.menu-cta)::after { display: none; }
+    nav.menu a.menu-cta {
+      margin-top: 4px;
+      text-align: center;
+      padding: 10px 12px;
+    }
+    nav.menu + .menu-toggle { margin-left: auto; }
+    nav.menu + .menu-toggle + .tbtn { margin-left: 8px; }
+  }
+
+  @media (max-width: 520px) {
+    .bar { gap: 8px; }
+    .brand .sub { display: none; }
+    .site-header .bar { height: 62px; }
+    .site-header.stuck .bar { height: 56px; }
+    .hero { padding-top: 64px; }
+    .hero-grid { gap: 42px; }
+    .stage { min-height: 390px; }
+    .phone { width: min(300px, 82vw); }
+    .float { width: min(100%, 290px); }
+    .meta { gap: 8px 14px; }
+    .fig { padding: 19px 17px 17px; }
+    .dl-it .sz { font-size: 12px; }
+    .dls-foot { line-height: 1.7; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    nav.menu,
+    nav.menu.open,
+    .menu-toggle,
+    main > section { transition: none !important; transform: none !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -584,13 +667,17 @@ d.setAttribute('data-theme',t||(window.matchMedia&&matchMedia('(prefers-color-sc
       <span aria-hidden="true" class="mark"></span>
       脑电波 <span class="sub">mood-tab</span>
     </a>
-    <nav class="menu" aria-label="主导航">
+    <nav id="mainMenu" class="menu" aria-label="主导航">
       <a href="#record">记录</a>
       <a href="#insight">回看</a>
       <a href="#support">更多</a>
       <a href="#privacy">隐私</a>
       <a class="menu-cta" href="#download">下载</a>
     </nav>
+
+    <button type="button" aria-label="打开导航" aria-expanded="false" aria-controls="mainMenu" class="tbtn menu-toggle" id="menuToggle">
+      <span aria-hidden="true">☰</span>
+    </button>
     <button type="button" aria-label="切换主题" class="tbtn" id="themeBtn">
       <svg class="i i-s" id="themeIcon"><use href="#i-sun"></use></svg>
     </button>
@@ -1002,6 +1089,36 @@ d.setAttribute('data-theme',t||(window.matchMedia&&matchMedia('(prefers-color-sc
     var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     var has = 'IntersectionObserver' in window;
     function $(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
+
+
+    // 0. 移动端导航：不改变桌面版布局，手机端改为可键盘/触摸操作的弹层菜单
+    var menuToggle = document.getElementById('menuToggle');
+    var mainMenu = document.getElementById('mainMenu');
+    function setMenu(open) {
+      if (!menuToggle || !mainMenu) return;
+      mainMenu.classList.toggle('open', open);
+      menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      menuToggle.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
+      menuToggle.querySelector('span').textContent = open ? '×' : '☰';
+    }
+    if (menuToggle && mainMenu) {
+      menuToggle.addEventListener('click', function () {
+        setMenu(!mainMenu.classList.contains('open'));
+      });
+      mainMenu.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () { setMenu(false); });
+      });
+      document.addEventListener('click', function (e) {
+        if (!mainMenu.classList.contains('open')) return;
+        if (!mainMenu.contains(e.target) && !menuToggle.contains(e.target)) setMenu(false);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') setMenu(false);
+      });
+      window.addEventListener('resize', function () {
+        if (window.innerWidth > 880) setMenu(false);
+      }, { passive: true });
+    }
 
     // 1. 入场（放最前：后面若抛错，也不会让内容永久不可见）
     //    同一批进入视口的元素按顺序错峰 80ms；播完即摘掉 .rv，避免干扰 hover 过渡
